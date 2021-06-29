@@ -13,3 +13,7 @@ using Test
     @test load(Base.unsafe_convert(Ptr{String}, m)) === str
   end
 end
+
+using ThreadingUtilities
+include(joinpath(pkgdir(ThreadingUtilities), "test", "runtests.jl"))
+
