@@ -28,6 +28,70 @@ end
 @generated offsetsize(::Type{T}) where {T} = Base.allocatedinline(T) ? sizeof(T) : sizeof(Int)
 
 @inline store!(p::Ptr{T}, v) where {T} = store!(p, convert(T, v))
+
+"""
+    LazyPreserve(x)
+
+Used to specify which arguments passed to [`preserve`](@ref) should be protected and
+converted to a pointer.
+"""
+struct LazyPreserve{A}
+    arg::A
+end
+
+"""
+    preserve_buffer(x)
+
+For structs wrapping arrays, using `GC.@preserve` can trigger heap allocations.
+`preserve_buffer` attempts to extract the heap-allocated part. Isolating it by itself
+will often allow the heap allocations to be elided. For example:
+
+```julia
+julia> using StaticArrays, BenchmarkTools
+julia> # Needed until a release is made featuring https://github.com/JuliaArrays/StaticArrays.jl/commit/a0179213b741c0feebd2fc6a1101a7358a90caed
+       Base.elsize(::Type{<:MArray{S,T}}) where {S,T} = sizeof(T)
+julia> @noinline foo(A) = unsafe_load(A,1)
+foo (generic function with 1 method)
+julia> function alloc_test_1()
+           A = view(MMatrix{8,8,Float64}(undef), 2:5, 3:7)
+           A[begin] = 4
+           GC.@preserve A foo(pointer(A))
+       end
+alloc_test_1 (generic function with 1 method)
+julia> function alloc_test_2()
+           A = view(MMatrix{8,8,Float64}(undef), 2:5, 3:7)
+           A[begin] = 4
+           pb = parent(A) # or `LoopVectorization.preserve_buffer(A)`; `perserve_buffer(::SubArray)` calls `parent`
+           GC.@preserve pb foo(pointer(A))
+       end
+alloc_test_2 (generic function with 1 method)
+julia> @benchmark alloc_test_1()
+BenchmarkTools.Trial:
+  memory estimate:  544 bytes
+  allocs estimate:  1
+  --------------
+  minimum time:     17.227 ns (0.00% GC)
+  median time:      21.352 ns (0.00% GC)
+  mean time:        26.151 ns (13.33% GC)
+  maximum time:     571.130 ns (78.53% GC)
+  --------------
+  samples:          10000
+  evals/sample:     998
+julia> @benchmark alloc_test_2()
+BenchmarkTools.Trial:
+  memory estimate:  0 bytes
+  allocs estimate:  0
+  --------------
+  minimum time:     3.275 ns (0.00% GC)
+  median time:      3.493 ns (0.00% GC)
+  mean time:        3.491 ns (0.00% GC)
+  maximum time:     4.998 ns (0.00% GC)
+  --------------
+  samples:          10000
+  evals/sample:     1000
+```
+"""
+@inline preserve_buffer(x::LazyPreserve) = preserve_buffer(x.arg)
 @inline preserve_buffer(x) = x
 @inline preserve_buffer(A::AbstractArray) = _preserve_buffer(A, parent(A))
 @inline _preserve_buffer(a::A, p::P) where {A,P<:AbstractArray} = _preserve_buffer(p, parent(p))
@@ -99,6 +163,62 @@ end
   end
   push!(body.args, Expr(:call, +, :offset, off))
   return body
+end
+
+"""
+    preserve(op, args...; kwargs...)
+
+Searches through `args` and `kwargs` for instances of [`LazyPreserve`](@ref), which are
+unwrapped using [`preserve_buffer`](@ref) and preserved from garbage collection
+(`GC.@preserve`). the resulting buffers are converted to pointers and passed in order to `op`.
+
+# Examples
+
+```julia
+julia> using ManualMemory: store!, preserve, LazyPreserve
+
+julia> x = [0 0; 0 0];
+
+julia> preserve(store!, LazyPreserve(x), 1)
+
+julia> x[1]
+1
+
+```
+"""
+preserve(op, args...; kwargs...) = _preserve(op, args, kwargs.data)
+@generated function _preserve(op, args::A, kwargs::NamedTuple{syms,K}) where {A,syms,K}
+    _preserve_expr(A, syms, K)
+end
+function _preserve_expr(::Type{A}, syms::Tuple{Vararg{Symbol}}, ::Type{K}) where {A,K}
+    body = Expr(:block)
+    call = Expr(:call, :op)
+    pres = :(GC.@preserve)
+    @inbounds for i in 1:length(A.parameters)
+        arg_i = _unwrap_preserve(body, pres, :(getfield(args, $i)), A.parameters[i])
+        push!(call.args, arg_i)
+    end
+    if length(syms) > 0
+        kwargs = Expr(:parameters)
+        @inbounds for i in 1:length(syms)
+            arg_i = _unwrap_preserve(body, pres, :(getfield(kwargs, $i)), K.parameters[i])
+            push!(call.args, Expr(:kw, syms[i], arg_i))
+        end
+        push!(call.args, kwargs)
+    end
+    push!(pres.args, call)
+    push!(body.args, pres)
+    return body
+end
+function _unwrap_preserve(body::Expr, pres::Expr, argexpr::Expr, argtype::Type)
+    if argtype <: LazyPreserve
+        bufsym = gensym()
+        push!(body.args, Expr(:(=), bufsym, Expr(:call, :preserve_buffer, argexpr)))
+        push!(pres.args, bufsym)
+        return :(pointer($bufsym))
+    else
+        return argexpr
+    end
 end
 
 end

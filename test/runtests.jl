@@ -1,4 +1,4 @@
-using ManualMemory: MemoryBuffer, load, store!
+using ManualMemory: MemoryBuffer, load, store!, LazyPreserve, preserve
 using Test
 
 @testset "ManualMemory.jl" begin
@@ -12,6 +12,10 @@ using Test
     store!(Base.unsafe_convert(Ptr{String}, m), str)
     @test load(Base.unsafe_convert(Ptr{String}, m)) === str
   end
+
+  x = [0 0; 0 0];
+  preserve(store!, LazyPreserve(x), 1)
+  @test x[1] === 1
 end
 
 using ThreadingUtilities
