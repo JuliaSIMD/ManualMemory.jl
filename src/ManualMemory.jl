@@ -30,14 +30,22 @@ end
 @inline store!(p::Ptr{T}, v) where {T} = store!(p, convert(T, v))
 
 """
-    LazyPreserve(x)
+    LazyPreserve(x, ptrcall=nothing)
 
-Used to specify which arguments passed to [`preserve`](@ref) should be protected and
-converted to a pointer.
+Used by [`preserve`](@ref) to identify arguments that will be unwrapped with
+[`preserve_buffer`](@ref), which is in turn converted to a pointer. If `ptrcall` is
+specified conversion to a pointer occurs through a call equivalent to
+`ptrcall(preserve_buffer(x), x)`. Otherwise, a call equivalent to
+`pointer(preserve_buffer(x))` occurs.
 """
-struct LazyPreserve{A}
+struct LazyPreserve{A,P}
     arg::A
+    ptrcall::P
 end
+LazyPreserve(arg) = LazyPreserve(arg, nothing)
+(p::LazyPreserve)(x) = p.ptrcall(x, p.arg)
+(p::LazyPreserve{A,Nothing})(x) where {A} = p.ptrcall(x)
+
 
 """
     preserve_buffer(x)
@@ -191,7 +199,7 @@ preserve(op, args...; kwargs...) = _preserve(op, args, kwargs.data)
     _preserve_expr(A, syms, K)
 end
 function _preserve_expr(::Type{A}, syms::Tuple{Vararg{Symbol}}, ::Type{K}) where {A,K}
-    body = Expr(:block)
+    body = Expr(:block, Expr(:meta,:inline))
     call = Expr(:call, :op)
     pres = :(GC.@preserve)
     @inbounds for i in 1:length(A.parameters)
