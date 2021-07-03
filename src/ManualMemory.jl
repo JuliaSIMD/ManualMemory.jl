@@ -44,7 +44,7 @@ struct LazyPreserve{A,P}
 end
 LazyPreserve(arg) = LazyPreserve(arg, nothing)
 (p::LazyPreserve)(x) = p.ptrcall(x, p.arg)
-(p::LazyPreserve{A,Nothing})(x) where {A} = p.ptrcall(x)
+(p::LazyPreserve{A,Nothing})(x) where {A} = pointer(x)
 
 
 """
@@ -223,7 +223,7 @@ function _unwrap_preserve(body::Expr, pres::Expr, argexpr::Expr, argtype::Type)
         bufsym = gensym()
         push!(body.args, Expr(:(=), bufsym, Expr(:call, :preserve_buffer, argexpr)))
         push!(pres.args, bufsym)
-        return :(pointer($bufsym))
+        return :($argexpr($bufsym))
     else
         return argexpr
     end
