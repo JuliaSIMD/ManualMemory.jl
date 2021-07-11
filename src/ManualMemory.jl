@@ -17,7 +17,7 @@ end
     Expr(:block, Expr(:meta,:inline), :(ccall(:jl_value_ptr, Ref{$T}, (Ptr{Cvoid},), unsafe_load(Base.unsafe_convert(Ptr{Ptr{Cvoid}}, p)))))
   end
 end
-@inline load(p::Ptr{UInt}, ::Type{T}) where {T} = load(reinterpret(Ptr{T}, p))
+@inline load(p::Ptr{UInt}, ::Type{T}) where {T} = load(p, T, 0)[2]
 @generated function store!(p::Ptr{T}, v::T) where {T}
   if Base.allocatedinline(T)
     Expr(:block, Expr(:meta,:inline), :(unsafe_store!(p, v); return nothing))
@@ -28,6 +28,11 @@ end
 @generated offsetsize(::Type{T}) where {T} = Base.allocatedinline(T) ? sizeof(T) : sizeof(Int)
 
 @inline store!(p::Ptr{T}, v) where {T} = store!(p, convert(T, v))
+
+mutable struct Reference{T}; data::T; end
+@inline load(p::Ptr{Reference{T}}) where {T} = getfield(ccall(:jl_value_ptr, Ref{Reference{T}}, (Ptr{Cvoid},), unsafe_load(Base.unsafe_convert(Ptr{Ptr{Cvoid}}, p))), :data)
+@inline dereference(r::Reference) = getfield(r, :data)
+@inline dereference(x) = x
 
 """
     LazyPreserve(x, ptrcall=nothing)
@@ -113,7 +118,7 @@ function load_aggregate(::Type{T}, offset::Int) where {T}
     TF = fieldtype(T, f)
     if Base.issingletontype(TF)
       push!(call.args, TF.instance)
-    elseif fieldcount(TF) ≡ 0
+    elseif (fieldcount(TF) ≡ 0) || (TF <: Reference)
       ptr = :(p + (offset + $offset))
       ptr = TF === UInt ? ptr : :(reinterpret(Ptr{$TF}, $ptr))
       push!(call.args, :(load($ptr)))
@@ -128,7 +133,7 @@ end
 @generated function load(p::Ptr{UInt}, ::Type{T}, offset::Int) where {T}
   if Base.issingletontype(T)
     call = Expr(:tuple, :offset, T.instance)
-  elseif fieldcount(T) ≡ 0
+  elseif (fieldcount(T) ≡ 0) || (T <: Reference)
     ptr = :(p + offset)
     ptr = T === UInt ? ptr : :(reinterpret(Ptr{$T}, $ptr))
     call = :(((offset + $(offsetsize(T)), load($ptr))))
@@ -145,7 +150,7 @@ function store_aggregate!(q::Expr, sym, ::Type{T}, offset::Int) where {T}
     TF = fieldtype(T, f)
     Base.issingletontype(TF) && continue
     gfcall = Expr(:call, gf, sym, f)
-    if fieldcount(TF) ≡ 0
+    if (fieldcount(TF) ≡ 0) || (TF <: Reference)
       ptr = :(p + (offset + $offset))
       ptr = TF === UInt ? ptr : :(reinterpret(Ptr{$TF}, $ptr))
       push!(q.args, :(store!($ptr, $gfcall)))
@@ -161,7 +166,7 @@ end
 @generated function store!(p::Ptr{UInt}, x::T, offset::Int) where {T}
   Base.issingletontype(T) && return :offset
   body = Expr(:block, Expr(:meta,:inline))
-  if fieldcount(T) ≡ 0
+  if (fieldcount(T) ≡ 0) || (T <: Reference)
     ptr = :(p + offset)
     ptr = T === UInt ? ptr : :(reinterpret(Ptr{$T}, $ptr))
     push!(body.args, :(store!($ptr, x)))
