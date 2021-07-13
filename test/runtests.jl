@@ -1,4 +1,4 @@
-using ManualMemory: MemoryBuffer, load, store!, LazyPreserve, preserve
+using ManualMemory: MemoryBuffer, load, store!, LazyPreserve, preserve, PseudoPtr
 using Test
 
 @testset "ManualMemory.jl" begin
@@ -16,6 +16,11 @@ using Test
   x = [0 0; 0 0];
   preserve(store!, LazyPreserve(x), 1)
   @test x[1] === 1
+  p = PseudoPtr(x, 1)
+  @test load(p) === 1
+  p += 1
+  store!(p, 2)
+  @test load(p) === 2
 end
 
 using ThreadingUtilities
