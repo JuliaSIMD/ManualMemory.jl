@@ -10,6 +10,23 @@ end
 @inline Base.unsafe_convert(::Type{Ptr{T}}, m::MemoryBuffer) where {T} = Ptr{T}(pointer_from_objref(m))
 @inline Base.pointer(m::MemoryBuffer{N,T}) where {N,T} = Ptr{T}(pointer_from_objref(m))
 
+"""
+    PseudoPtr(data, position=firstindex(data))
+
+Provides a convenient wrapper that functions like `pointer(data)` for instances where `data`
+cannot produce a viable pointer.
+"""
+struct PseudoPtr{T,D} <: Ref{T}
+    data::D
+    position::Int
+
+    PseudoPtr(data::D, position) where {D} = new{eltype(D),D}(data, position)
+    PseudoPtr(data) = PseudoPtr(data, firstindex(data))
+end
+Base.:(+)(x::PseudoPtr, y::Int) = PseudoPtr(getfield(x, :data), getfield(x, :position) + y)
+Base.:(+)(x::Int, y::PseudoPtr) = y + x
+
+@inline load(x::PseudoPtr) = @inbounds(getindex(getfield(x, :data), getfield(x, :position)))
 @generated function load(p::Ptr{T}) where {T}
   if Base.allocatedinline(T)
     Expr(:block, Expr(:meta,:inline), :(unsafe_load(p)))
@@ -18,6 +35,10 @@ end
   end
 end
 @inline load(p::Ptr{UInt}, ::Type{T}) where {T} = load(p, T, 0)[2]
+
+@inline function store!(x::PseudoPtr, val)
+    @inbounds(setindex!(getfield(x, :data), val, getfield(x, :position)))
+end
 @generated function store!(p::Ptr{T}, v::T) where {T}
   if Base.allocatedinline(T)
     Expr(:block, Expr(:meta,:inline), :(unsafe_store!(p, v); return nothing))
