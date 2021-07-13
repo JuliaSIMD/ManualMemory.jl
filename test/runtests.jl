@@ -21,6 +21,9 @@ using Test
   p += 1
   store!(p, 2)
   @test load(p) === 2
+  p = 1 + p
+  store!(p, 3)
+  @test load(p) === 3
 end
 
 using ThreadingUtilities
