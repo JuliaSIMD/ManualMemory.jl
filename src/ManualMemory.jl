@@ -2,13 +2,66 @@ module ManualMemory
 
 mutable struct MemoryBuffer{N,T}
   data::NTuple{N,T}
+
   @inline function MemoryBuffer{N,T}(::UndefInitializer) where {N,T}
     @assert Base.allocatedinline(T)
     new{N,T}()
   end
 end
+
+struct DynamicBuffer{T}
+  data::MemoryBuffer{<:Any,T}
+
+  @inline function DynamicBuffer{T}(::UndefInitializer, n::Int) where {T}
+    @nospecialize
+    data = MemoryBuffer{n,T}(undef)
+    new{T}(data)
+  end
+end
+
+struct ImmutableBuffer{T}
+  data::Tuple{Vararg{T}}
+
+  @inline ImmutableBuffer{T}(@nospecialize(data::Tuple{Vararg{T}})) where {T} = new{T}(data)
+  @inline ImmutableBuffer(@nospecialize(data::Tuple{Vararg{T}})) where {T} = new{T}(data)
+end
+
+## unsafe_convert
+@inline function Base.unsafe_convert(::Type{Ptr{T}}, x::DynamicBuffer) where {T}
+    @nospecialize
+    data = getfield(x, :data)
+    p = pointer_from_objref(data)
+    @specialize
+    return Ptr{T}(p)
+end
 @inline Base.unsafe_convert(::Type{Ptr{T}}, m::MemoryBuffer) where {T} = Ptr{T}(pointer_from_objref(m))
+
+## pointer
 @inline Base.pointer(m::MemoryBuffer{N,T}) where {N,T} = Ptr{T}(pointer_from_objref(m))
+Base.pointer(x::ImmutableBuffer) = PseudoPtr(x, 1)
+@inline function Base.pointer(x::DynamicBuffer{T}) where {T}
+    @nospecialize
+    data = getfield(x, :data)
+    p = pointer_from_objref(data)
+    @specialize
+    return Ptr{T}(p)
+end
+
+## eltype
+Base.eltype(::Type{<:MemoryBuffer{<:Any,T}}) where {T} = T
+Base.eltype(::Type{<:DynamicBuffer{T}}) where {T} = T
+Base.eltype(::Type{<:ImmutableBuffer{T}}) where {T} = T
+
+## length
+function Base.length(x::DynamicBuffer)::Int
+    @nospecialize
+    length(getfield(x, :data))
+end
+Base.length(::MemoryBuffer{N}) where {N} = N
+function Base.length(x::ImmutableBuffer)::Int
+    @nospecialize
+    length(getfield(x, :data))
+end
 
 """
     PseudoPtr(data, position=firstindex(data))
@@ -26,16 +79,6 @@ end
 Base.:(+)(x::PseudoPtr, y::Int) = PseudoPtr(getfield(x, :data), getfield(x, :position) + y)
 Base.:(+)(x::Int, y::PseudoPtr) = y + x
 
-@inline load(x::PseudoPtr) = @inbounds(getindex(getfield(x, :data), getfield(x, :position)))
-@generated function load(p::Ptr{T}) where {T}
-  if Base.allocatedinline(T)
-    Expr(:block, Expr(:meta,:inline), :(unsafe_load(p)))
-  else
-    Expr(:block, Expr(:meta,:inline), :(ccall(:jl_value_ptr, Ref{$T}, (Ptr{Cvoid},), unsafe_load(Base.unsafe_convert(Ptr{Ptr{Cvoid}}, p)))))
-  end
-end
-@inline load(p::Ptr{UInt}, ::Type{T}) where {T} = load(p, T, 0)[2]
-
 @inline function store!(x::PseudoPtr, val)
     @inbounds(setindex!(getfield(x, :data), val, getfield(x, :position)))
 end
@@ -51,7 +94,23 @@ end
 @inline store!(p::Ptr{T}, v) where {T} = store!(p, convert(T, v))
 
 mutable struct Reference{T}; data::T; end
+
 @inline load(p::Ptr{Reference{T}}) where {T} = getfield(ccall(:jl_value_ptr, Ref{Reference{T}}, (Ptr{Cvoid},), unsafe_load(Base.unsafe_convert(Ptr{Ptr{Cvoid}}, p))), :data)
+@inline load(x::PseudoPtr) = @inbounds(getindex(getfield(x, :data), getfield(x, :position)))
+@inline function load(x::PseudoPtr{T,ImmutableBuffer{T}})::T where {T}
+    @nospecialize
+    return @inbounds(getfield(getfield(getfield(x, :data), :data), getfield(x, :position)))
+end
+@generated function load(p::Ptr{T}) where {T}
+  if Base.allocatedinline(T)
+    Expr(:block, Expr(:meta,:inline), :(unsafe_load(p)))
+  else
+    Expr(:block, Expr(:meta,:inline), :(ccall(:jl_value_ptr, Ref{$T}, (Ptr{Cvoid},), unsafe_load(Base.unsafe_convert(Ptr{Ptr{Cvoid}}, p)))))
+  end
+end
+@inline load(p::Ptr{UInt}, ::Type{T}) where {T} = load(p, T, 0)[2]
+
+
 @inline dereference(r::Reference) = getfield(r, :data)
 @inline dereference(x) = x
 
