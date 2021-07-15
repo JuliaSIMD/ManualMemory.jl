@@ -23,7 +23,9 @@ struct ImmutableBuffer{T}
   data::Tuple{Vararg{T}}
 
   @inline ImmutableBuffer{T}(@nospecialize(data::Tuple{Vararg{T}})) where {T} = new{T}(data)
-  @inline ImmutableBuffer(@nospecialize(data::Tuple{Vararg{T}})) where {T} = new{T}(data)
+  @inline function ImmutableBuffer(@nospecialize(data::Tuple{Vararg{T}})) where {T}
+    ImmutableBuffer{T}(data)
+  end
 end
 
 ## unsafe_convert

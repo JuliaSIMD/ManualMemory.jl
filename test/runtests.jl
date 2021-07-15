@@ -9,6 +9,9 @@ using Test
   d = ManualMemory.DynamicBuffer{Float64}(undef, 4)
   b = ManualMemory.ImmutableBuffer((1.23, 2.0, 3.0, 4.0))
 
+  @test eltype(m) <: Float64
+  @test eltype(d) <: Float64
+  @test eltype(b) <: Float64
   store!(pointer(m), 1.23)
   store!(pointer(d), 1.23)
   @test load(pointer(m)) == 1.23
