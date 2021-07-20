@@ -29,6 +29,8 @@ using Test
     store!(Base.unsafe_convert(Ptr{String}, d), str)
     @test load(Base.unsafe_convert(Ptr{String}, d)) === str
   end
+  @test ManualMemory.dereference(m) isa NTuple{4,Float64}
+  @test ManualMemory.dereference(d) isa ManualMemory.ImmutableBuffer{Float64}
 
   x = [0 0; 0 0];
   preserve(store!, ManualMemory.LazyPreserve(x), 1)

@@ -112,8 +112,19 @@ end
 end
 @inline load(p::Ptr{UInt}, ::Type{T}) where {T} = load(p, T, 0)[2]
 
+"""
+    dereference(r)
 
+Returns the immutable type wrapped by `r`.
+
+See also: [`Reference`](@ref), [`MemoryBuffer`](@ref), [`DynamicBuffer`](@ref)
+"""
 @inline dereference(r::Reference) = getfield(r, :data)
+@inline dereference(r::MemoryBuffer) = getfield(r, :data)
+@inline function dereference(r::DynamicBuffer{T})::ImmutableBuffer{T} where {T}
+    @nospecialize
+    return ImmutableBuffer(dereference(getfield(r, :data)))
+end
 @inline dereference(x) = x
 
 """
