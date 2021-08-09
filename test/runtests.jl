@@ -1,4 +1,4 @@
-using ManualMemory: MemoryBuffer, load, store!, LazyPreserve, preserve, PseudoPtr
+using ManualMemory: MemoryBuffer, load, store!, LazyPreserve, preserve, PseudoPtr, Reference
 using Test
 
 @testset "ManualMemory.jl" begin
@@ -24,6 +24,13 @@ using Test
   p = 1 + p
   store!(p, 3)
   @test load(p) === 3
+
+  x = Reference{Int}()
+  y = Reference(1)
+  GC.@preserve x y begin
+    store!(pointer(x), 1)
+    @test load(pointer(x)) === 1 === load(pointer(y))
+  end
 end
 
 using ThreadingUtilities
