@@ -50,7 +50,12 @@ end
 
 @inline store!(p::Ptr{T}, v) where {T} = store!(p, convert(T, v))
 
-mutable struct Reference{T}; data::T; end
+mutable struct Reference{T}
+    data::T
+
+    Reference{T}() where {T} = new()
+    Reference{T}(x) where {T} = new(x)
+end
 @inline load(p::Ptr{Reference{T}}) where {T} = getfield(ccall(:jl_value_ptr, Ref{Reference{T}}, (Ptr{Cvoid},), unsafe_load(Base.unsafe_convert(Ptr{Ptr{Cvoid}}, p))), :data)
 @inline dereference(r::Reference) = getfield(r, :data)
 @inline dereference(x) = x
