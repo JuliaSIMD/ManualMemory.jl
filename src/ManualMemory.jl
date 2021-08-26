@@ -1,5 +1,8 @@
 module ManualMemory
 
+using LinearAlgebra
+using SparseArrays
+
 mutable struct MemoryBuffer{N,T}
   data::NTuple{N,T}
   @inline function MemoryBuffer{N,T}(::UndefInitializer) where {N,T}
@@ -9,6 +12,18 @@ mutable struct MemoryBuffer{N,T}
 end
 @inline Base.unsafe_convert(::Type{Ptr{T}}, m::MemoryBuffer) where {T} = Ptr{T}(pointer_from_objref(m))
 @inline Base.pointer(m::MemoryBuffer{N,T}) where {N,T} = Ptr{T}(pointer_from_objref(m))
+
+"""
+    buffer(x)
+
+Return the buffer data that `x` points to. Unlike [`preserve_buffer`](@ref), `buffer` will
+not return buffers nested within multiple layers. Instead `buffer` only returns the buffer
+that is  immediately wrapped by `x`.
+"""
+buffer(x) = parent(x)
+buffer(x::Diagonal) = getfield(x, :diag)
+buffer(x::SparseMatrixCSC) = getfield(x, :nzval)
+buffer(x::SparseVector) = getfield(x, :nzval)
 
 """
     PseudoPtr(data, position=firstindex(data))
@@ -132,11 +147,9 @@ BenchmarkTools.Trial:
 ```
 """
 @inline preserve_buffer(x::LazyPreserve) = preserve_buffer(x.arg)
-@inline preserve_buffer(x) = x
-@inline preserve_buffer(A::AbstractArray) = _preserve_buffer(A, parent(A))
-@inline _preserve_buffer(a::A, p::P) where {A,P<:AbstractArray} = _preserve_buffer(p, parent(p))
-@inline _preserve_buffer(a::A, p::A) where {A<:AbstractArray} = a
-@inline _preserve_buffer(a::A, p::P) where {A,P} = p
+@inline preserve_buffer(x) = _preserve_buffer(x, buffer(x))
+@inline _preserve_buffer(a::A, p::P) where {A,P} = _preserve_buffer(p, buffer(p))
+@inline _preserve_buffer(a::A, p::A) where {A} = a
 
 function load_aggregate(::Type{T}, offset::Int) where {T}
   numfields = fieldcount(T)

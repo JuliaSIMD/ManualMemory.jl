@@ -1,7 +1,11 @@
 name = "ManualMemory"
 uuid = "d125e4d3-2237-4719-b19c-fa641b8a4667"
 authors = ["chriselrod <elrodc@gmail.com> and contributors"]
-version = "0.1.6"
+version = "0.1.7"
+
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
 julia = "1.5"
