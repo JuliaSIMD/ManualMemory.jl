@@ -1,7 +1,13 @@
+using ManualMemory
 using ManualMemory: MemoryBuffer, load, store!, LazyPreserve, preserve, PseudoPtr, Reference
+using SparseArrays
+using LinearAlgebra
 using Test
 
 @testset "ManualMemory.jl" begin
+  @test ManualMemory.buffer(sparse([1; 2; 3], [1; 2; 3], [1; 2; 3])) ==
+    ManualMemory.buffer(sparsevec([1, 2, 0, 0, 3, 0])) ==
+    ManualMemory.buffer(Diagonal([1,2,3]))
 
   @test_throws AssertionError MemoryBuffer{4,String}(undef)
   m = MemoryBuffer{4,Float64}(undef);
