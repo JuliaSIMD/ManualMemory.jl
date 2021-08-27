@@ -147,9 +147,11 @@ BenchmarkTools.Trial:
 ```
 """
 @inline preserve_buffer(x::LazyPreserve) = preserve_buffer(x.arg)
-@inline preserve_buffer(x) = _preserve_buffer(x, buffer(x))
-@inline _preserve_buffer(a::A, p::P) where {A,P} = _preserve_buffer(p, buffer(p))
-@inline _preserve_buffer(a::A, p::A) where {A} = a
+@inline preserve_buffer(x) = x
+@inline preserve_buffer(A::AbstractArray) = _preserve_buffer(A, parent(A))
+@inline _preserve_buffer(a::A, p::P) where {A,P<:AbstractArray} = _preserve_buffer(p, parent(p))
+@inline _preserve_buffer(a::A, p::A) where {A<:AbstractArray} = a
+@inline _preserve_buffer(a::A, p::P) where {A,P} = p
 
 function load_aggregate(::Type{T}, offset::Int) where {T}
   numfields = fieldcount(T)
