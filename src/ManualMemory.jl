@@ -17,11 +17,11 @@ Provides a convenient wrapper that functions like `pointer(data)` for instances 
 cannot produce a viable pointer.
 """
 struct PseudoPtr{T,D} <: Ref{T}
-    data::D
-    position::Int
+  data::D
+  position::Int
 
-    PseudoPtr(data::D, position) where {D} = new{eltype(D),D}(data, position)
-    PseudoPtr(data) = PseudoPtr(data, firstindex(data))
+  PseudoPtr(data::D, position) where {D} = new{eltype(D),D}(data, position)
+  PseudoPtr(data) = PseudoPtr(data, firstindex(data))
 end
 Base.:(+)(x::PseudoPtr, y::Int) = PseudoPtr(getfield(x, :data), getfield(x, :position) + y)
 Base.:(+)(x::Int, y::PseudoPtr) = y + x
@@ -51,10 +51,9 @@ end
 @inline store!(p::Ptr{T}, v) where {T} = store!(p, convert(T, v))
 
 mutable struct Reference{T}
-    data::T
-
-    Reference{T}() where {T} = new{T}()
-    Reference(x) = new{typeof(x)}(x)
+  data::T
+  Reference{T}() where {T} = new{T}()
+  Reference(x) = new{typeof(x)}(x)
 end
 @inline Base.pointer(r::Reference{T}) where {T} = Ptr{T}(pointer_from_objref(r))
 @inline load(p::Ptr{Reference{T}}) where {T} = getfield(ccall(:jl_value_ptr, Ref{Reference{T}}, (Ptr{Cvoid},), unsafe_load(Base.unsafe_convert(Ptr{Ptr{Cvoid}}, p))), :data)
@@ -71,8 +70,8 @@ specified conversion to a pointer occurs through a call equivalent to
 `pointer(preserve_buffer(x))` occurs.
 """
 struct LazyPreserve{A,P}
-    arg::A
-    ptrcall::P
+  arg::A
+  ptrcall::P
 end
 LazyPreserve(arg) = LazyPreserve(arg, nothing)
 (p::LazyPreserve)(x) = p.ptrcall(x, p.arg)
@@ -228,37 +227,37 @@ julia> x[1]
 """
 preserve(op, args...; kwargs...) = _preserve(op, args, kwargs.data)
 @generated function _preserve(op, args::A, kwargs::NamedTuple{syms,K}) where {A,syms,K}
-    _preserve_expr(A, syms, K)
+  _preserve_expr(A, syms, K)
 end
 function _preserve_expr(::Type{A}, syms::Tuple{Vararg{Symbol}}, ::Type{K}) where {A,K}
-    body = Expr(:block, Expr(:meta,:inline))
-    call = Expr(:call, :op)
-    pres = :(GC.@preserve)
-    @inbounds for i in 1:length(A.parameters)
-        arg_i = _unwrap_preserve(body, pres, :(getfield(args, $i)), A.parameters[i])
-        push!(call.args, arg_i)
+  body = Expr(:block, Expr(:meta,:inline))
+  call = Expr(:call, :op)
+  pres = :(GC.@preserve)
+  @inbounds for i in 1:length(A.parameters)
+    arg_i = _unwrap_preserve(body, pres, :(getfield(args, $i)), A.parameters[i])
+    push!(call.args, arg_i)
+  end
+  if length(syms) > 0
+    kwargs = Expr(:parameters)
+    @inbounds for i in 1:length(syms)
+      arg_i = _unwrap_preserve(body, pres, :(getfield(kwargs, $i)), K.parameters[i])
+      push!(call.args, Expr(:kw, syms[i], arg_i))
     end
-    if length(syms) > 0
-        kwargs = Expr(:parameters)
-        @inbounds for i in 1:length(syms)
-            arg_i = _unwrap_preserve(body, pres, :(getfield(kwargs, $i)), K.parameters[i])
-            push!(call.args, Expr(:kw, syms[i], arg_i))
-        end
-        push!(call.args, kwargs)
-    end
-    push!(pres.args, call)
-    push!(body.args, pres)
-    return body
+    push!(call.args, kwargs)
+  end
+  push!(pres.args, call)
+  push!(body.args, pres)
+  return body
 end
 function _unwrap_preserve(body::Expr, pres::Expr, argexpr::Expr, argtype::Type)
-    if argtype <: LazyPreserve
-        bufsym = gensym()
-        push!(body.args, Expr(:(=), bufsym, Expr(:call, :preserve_buffer, argexpr)))
-        push!(pres.args, bufsym)
-        return :($argexpr($bufsym))
-    else
-        return argexpr
-    end
+  if argtype <: LazyPreserve
+    bufsym = gensym()
+    push!(body.args, Expr(:(=), bufsym, Expr(:call, :preserve_buffer, argexpr)))
+    push!(pres.args, bufsym)
+    return :($argexpr($bufsym))
+  else
+    return argexpr
+  end
 end
 
 end
