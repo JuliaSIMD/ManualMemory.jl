@@ -31,8 +31,11 @@ using Test
     store!(pointer(x), 1)
     @test load(pointer(x)) === 1 === load(pointer(y))
   end
+
+  # Test construction with existing data
+  s = (1,2,3,4,5)
+  @test MemoryBuffer(s).data === s
 end
 
 using ThreadingUtilities
 include(joinpath(pkgdir(ThreadingUtilities), "test", "runtests.jl"))
-
