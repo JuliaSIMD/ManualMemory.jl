@@ -6,6 +6,10 @@ mutable struct MemoryBuffer{N,T}
     @assert Base.allocatedinline(T)
     new{N,T}()
   end
+  @inline function MemoryBuffer(data::NTuple{N,T}) where {N,T}
+    @assert Base.allocatedinline(T)
+    new{N,T}(data)
+  end
 end
 @inline Base.unsafe_convert(::Type{Ptr{T}}, m::MemoryBuffer) where {T} = Ptr{T}(pointer_from_objref(m))
 @inline Base.pointer(m::MemoryBuffer{N,T}) where {N,T} = Ptr{T}(pointer_from_objref(m))

@@ -1,7 +1,7 @@
 name = "ManualMemory"
 uuid = "d125e4d3-2237-4719-b19c-fa641b8a4667"
 authors = ["chriselrod <elrodc@gmail.com> and contributors"]
-version = "0.1.6"
+version = "0.1.7"
 
 [compat]
 julia = "1.5"
