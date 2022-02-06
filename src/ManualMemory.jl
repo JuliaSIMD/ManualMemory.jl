@@ -13,6 +13,17 @@ mutable struct MemoryBuffer{N,T}
 end
 @inline Base.unsafe_convert(::Type{Ptr{T}}, m::MemoryBuffer) where {T} = Ptr{T}(pointer_from_objref(m))
 @inline Base.pointer(m::MemoryBuffer{N,T}) where {N,T} = Ptr{T}(pointer_from_objref(m))
+@inline Base.:(==)(::MemoryBuffer, ::MemoryBuffer) = false
+@inline function Base.:(==)(a::MemoryBuffer{N,A}, b::MemoryBuffer{N,B}) where {N,A,B}
+    GC.@preserve a b begin
+        pa = pointer(a)
+        pb = pointer(b)
+        for n in 0:N-1
+            load(pa + n*offsetsize(A)) == load(pb + n*offsetsize(B)) || return false
+        end
+        return true
+    end
+end
 
 """
     PseudoPtr(data, position=firstindex(data))
