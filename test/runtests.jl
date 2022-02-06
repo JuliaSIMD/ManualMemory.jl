@@ -35,6 +35,13 @@ using Test
   # Test construction with existing data
   s = (1,2,3,4,5)
   @test MemoryBuffer(s).data === s
+
+  # Test equality and inequality
+  @test MemoryBuffer((1,2,3,4,5)) == MemoryBuffer((1,2,3,4,5))
+  @test MemoryBuffer((1,2,3,4,6)) != MemoryBuffer((1,2,3,4,5))
+  @test MemoryBuffer((0x01,0x02)) == MemoryBuffer((1,2))
+  @test MemoryBuffer((0x01,0x02)) != MemoryBuffer((0x01,0x02,0x03))
+
 end
 
 using ThreadingUtilities
